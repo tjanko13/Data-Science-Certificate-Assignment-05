@@ -1,0 +1,58 @@
+---
+title: "A"
+author: "Scott Stoltzman"
+date: "5/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library('tidyverse')
+options(scipen = 999)
+telcom = read_csv('https://s3.amazonaws.com/foco-ds-portal-files/WA_Fn-UseC_-Telco-Customer-Churn.csv')
+```
+
+
+```{r}
+dat = telcom
+dat
+```
+
+```{r}
+summary(dat)
+```
+```{r}
+dat = dat %>% 
+  filter(!is.na(TotalCharges))
+```
+
+
+
+```{r}
+dat %>%
+  select(Churn) %>%
+  unique()
+
+```
+
+```{r}
+dat %>%
+  group_by(Churn) %>%
+  summarize(n = n()) %>%
+  mutate(n_pct = n / sum(n))
+```
+
+```{r}
+dat %>%
+  ggplot(aes(y=MonthlyCharges, x=Churn)) + 
+  geom_bar(stat='identity')
+```
+
+
+```{r}
+dat %>%
+  mutate(monthly_total_diff = MonthlyCharges - TotalCharges) %>%
+  filter(monthly_total_diff == 0)
+```
+
+
+

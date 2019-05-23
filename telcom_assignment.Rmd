@@ -12,6 +12,62 @@ telcom = read_csv('https://s3.amazonaws.com/foco-ds-portal-files/WA_Fn-UseC_-Tel
 
 Begin your analysis here!
 ```{r}
-
+dat = telcom #this step keeps us from having to download it again in the event we mess up the data
+dat
 ```
+
+
+```{r}
+# Take a look at what's going on in each column
+summary(dat)
+```
+```{r}
+# Should look into why the total charges are NA....
+dat %>% filter(is.na(TotalCharges))
+```
+
+
+```{r}
+telcom %>%
+  group_by(Churn) %>%
+  summarise(n = n()) %>%
+  mutate(n_pct = round(n / sum(n), 2))
+```
+
+
+```{r}
+dat %>%
+  ggplot(aes(MonthlyCharges)) +
+  geom_histogram(binwidth = 5)
+```
+
+
+```{r}
+dat %>%
+  ggplot(aes(MonthlyCharges)) +
+  geom_histogram(binwidth = 5) + facet_wrap(~Churn)
+```
+
+
+```{r}
+dat = dat %>%
+  mutate(months_of_service = TotalCharges / MonthlyCharges) # assumes no increase/decrease in rates
+dat %>% select(months_of_service)
+```
+
+
+```{r}
+dat %>% 
+  ggplot(aes(months_of_service)) + 
+  geom_histogram(binwidth = 3)
+```
+
+
+```{r}
+dat %>% 
+  ggplot(aes(tenure)) + 
+  geom_histogram() + 
+  facet_wrap(~Churn)
+```
+
 
