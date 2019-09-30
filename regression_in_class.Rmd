@@ -47,7 +47,7 @@ dat
 ```
 
 
-### Perform some EDA
+#### Now that your data is easier to handle, perform some EDA
 ```{r}
 dat %>%
   summary()
@@ -58,6 +58,7 @@ colSums(is.na(dat))
 ```
 
 
+Plot the `total_users` by `date`
 ```{r}
 dat %>% 
   ggplot() + 
@@ -65,18 +66,19 @@ dat %>%
 ```
 
 
-# Huh? Oh yeah, this is hourly!
+Huh??? why did that happen?
 ```{r}
 dat %>%
   group_by(date) %>%
-  summarize(avg_users = mean(total_users)) %>%
-  ggplot(aes(x = date, y = avg_users)) + 
+  summarize(total_users = sum(total_users)) %>%
+  ggplot(aes(x = date, y = total_users)) + 
   geom_line() + 
   geom_smooth(method = 'loess') +
-  ggtitle('Average Daily Users 2011 - 2012')
+  ggtitle('Total Daily Users 2011 - 2012')
 ```
 
 
+What does the distribution of daily users per hour look like?
 ```{r}
 dat %>%
   group_by(date, hour) %>%
@@ -87,7 +89,7 @@ dat %>%
 ```
 
 
-
+What's the distribution of average users by day of the week look like?
 ```{r}
 dat %>%
   group_by(date, hour, day_of_the_week) %>%
@@ -97,6 +99,7 @@ dat %>%
 ```
 
 
+What does a working day vs. non-working day look like per hour in terms of average users?
 ```{r}
 dat %>%
   group_by(hour, working_day) %>%
@@ -108,7 +111,7 @@ dat %>%
 ```
 
 
-
+Since we will be using temperatures, let's look at the relationship between `temperature_f` and `temperature_feels_f`
 ```{r}
 dat %>%
   ggplot(aes(x = temperature_f, y = temperature_feels_f)) + 
@@ -116,7 +119,7 @@ dat %>%
 ```
 
 
-
+Let's try to figure out what the deal is with the outliers...
 ```{r}
 dat %>% 
   filter(temperature_f > 60 & temperature_f < 90) %>%
@@ -124,6 +127,7 @@ dat %>%
 ```
 
 
+The error seems clear, but let's take a look at some of the data before jumping to a conclusion
 ```{r}
 dat %>%
   mutate(tmp_diff = abs(temperature_f - temperature_feels_f)) %>%
@@ -132,6 +136,7 @@ dat %>%
 ```
 
 
+We do not want to throw out the data. We are probably safe to make some assumptions about imputing the values. However, that requires a bit of manipulation to make `NA` where the temperature doesn't seem accurate. Let's add the `NA`
 ```{r}
 dat %>%
   mutate(tmp_diff = abs(temperature_f - temperature_feels_f),
@@ -141,7 +146,7 @@ dat %>%
 ```
 
 
-
+We need to replace our `NA` values with the mean of the other data, grouped by all of the grouping variables. Let's call our new dataset `clean_dat`.
 ```{r}
 clean_dat = dat %>% 
   mutate(tmp_diff = abs(temperature_f - temperature_feels_f),
@@ -152,7 +157,17 @@ clean_dat = dat %>%
 ```
 
 
+Create the same plot in which we discovered the inconsistencies in the data. Notice what happened to the outliers.
+```{r}
+clean_dat %>%
+  ggplot(aes(x = temperature_f, y = temperature_feels_f)) + 
+  geom_point()
+```
 
+
+
+
+Let's plot our temperature data again, this time we can group by `date` and use the average of our data. Would you say these two variables are correlated?
 ```{r}
 clean_dat %>%
   group_by(date) %>%
@@ -165,6 +180,7 @@ clean_dat %>%
 ```
 
 
+What is the relationship between average temperature and average users?
 ```{r}
 clean_dat %>% 
   group_by(date) %>%
@@ -176,6 +192,7 @@ clean_dat %>%
 ```
 
 
+What is the relationship between average temperature feels like and average users?
 ```{r}
 clean_dat %>% 
   group_by(date) %>%
@@ -187,6 +204,7 @@ clean_dat %>%
 ```
 
 
+Plotting all of the variables against each other can sometimes help to find correlations.
 ```{r}
 temporary = clean_dat %>%
   group_by(date) %>%
@@ -200,14 +218,15 @@ plot(temporary)
 
 
 
-
+We will call temperature feels like `x` and total users `y` to make our introduction to linear regression easier.
 ```{r}
 reg_dat = tibble(x = clean_dat$temperature_feels_f, y = clean_dat$total_users)
+reg_dat
 ```
 
 
-# y = mx + b
-
+### y = mx + b
+Now we create the formula for our line of best fit. We will just guess some slope and intercept numbers to start off with.
 ```{r}
 slope = 10
 intercept = -9
@@ -215,6 +234,11 @@ intercept = -9
 model = reg_dat %>%
   mutate(fit = (slope * x) + intercept)
 
+head(model)
+```
+
+
+```{r}
 model %>%
   ggplot(aes(x = x)) + 
   geom_point(aes(y = y), alpha = 0.10) + 
@@ -222,7 +246,7 @@ model %>%
 ```
 
 
-
+Let's modify those numbers and see how our chart looks.
 ```{r}
 slope = 4
 intercept = -25
@@ -237,16 +261,14 @@ model %>%
 ```
 
 
-```{r}
-head(model)
-```
-
+Residuals are important. They tell us how far off the fit is from the true point.
 ```{r}
 model %>% 
   mutate(residuals = fit - y)
 ```
 
 
+Let's take a look at what a histogram of the residuals looks like. A good result looks like it's centered around 0 and is "normally" distributed.
 ```{r}
 slope = 4
 intercept = -25
@@ -261,6 +283,7 @@ model %>%
 ```
 
 
+Let's do this for a whole bunch of models to prove a point.
 ```{r}
 slope = 1
 intercept = -10
@@ -292,6 +315,7 @@ all_models %>%
 ```
 
 
+We need to know the total magnitude of the error, what's wrong with doing this?
 ```{r}
 all_models %>%
   mutate(residuals = fit - y) %>%
@@ -300,6 +324,7 @@ all_models %>%
 ```
 
 
+We use the sum of squared error in order to account for both positive and negative errors! That way everything is positive.
 ```{r}
 all_models %>%
   mutate(residuals = fit - y,
@@ -309,6 +334,8 @@ all_models %>%
 ```
 
 
+
+We will run a bunch of different intercepts and slopes and find the sum of squared errors.
 ```{r}
 slope = -1
 intercept = -10
@@ -347,62 +374,13 @@ model %>%
 ```
 
 
-## Linear Regression
+### R can do this for us
 
 ```{r}
-cor(clean_dat$total_users, clean_dat$temperature_feels_f)
-```
-
-
-
-```{r}
-mod = lm(total_users ~ temperature_feels_f, data = reg_dat)
+mod = lm(total_users ~ temperature_feels_f, data = clean_dat)
 summary(mod)
 ```
 
+The slope tells us how much 1 unit change in `temperature_feels_f` relates to change in `total_users`. So in this case, 3.5 more users for every 1 degree increase! They are huge global warming fans...
 
-```{r}
-mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed, data = clean_dat)
-summary(mod)
-```
-
-
-```{r}
-mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed + day_of_the_week, data = clean_dat)
-summary(mod)
-```
-
-
-
-
-
-```{r}
-fct_dat = clean_dat %>%
-  mutate(hour = as.factor(hour),
-         season = as.factor(season),
-         holiday = as.factor(holiday),
-         day_of_the_week = as.factor(day_of_the_week),
-         weather_type = as.factor(weather_type),
-         working_day = as.factor(working_day)) %>%
-  select(-tmp_feel_normal)
-
-
-mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed, data = fct_dat)
-summary(mod)
-```
-
-
-```{r}
-mod = lm(total_users ~ ., data = fct_dat)
-summary(mod)
-```
-
-
-
-```{r}
-fct_dat_mod = fct_dat %>%
-  select(-tmp_diff,-casual_users, -registered_users, -date)
-mod = lm(total_users ~ ., data = fct_dat_mod)
-summary(mod)
-```
-
+R-squared will tell us how good the line fits. The closer to 1 it is, the better. We will talk about the other measurements as we move forward in comparing models!
