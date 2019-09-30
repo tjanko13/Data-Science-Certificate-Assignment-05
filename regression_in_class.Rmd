@@ -1,0 +1,408 @@
+---
+title: "Regression in Data Analysis"
+author: "Scott Stoltzman"
+date: "5/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library('janitor')
+library('lubridate')
+library('tidyverse')
+```
+
+### Situation:  
+
+A bike sharing company has provided you with data from <https://data.world/data-society/capital-bikeshare-2011-2012>. They would like you to analyze it and help them forecast the number of people they can expect to see, hourly, each day on their bikes. They will have a forecast of weather variables that they consider to be accurate and are willing to accept the risk involved with changes in weather.
+
+### Read in data
+```{r}
+raw_dat = read_csv('https://foco-ds-portal-files.s3.amazonaws.com/bike+data.csv')
+```
+
+### Look at data
+```{r}
+head(raw_dat)
+```
+
+### What could be better?
+```{r}
+# Names are capitalized
+raw_dat %>%
+  clean_names()
+```
+
+```{r}
+# Dates are not actually dates
+raw_dat %>%
+  mutate(Date = mdy(Date))
+```
+
+
+```{r}
+dat = raw_dat %>%
+  clean_names() %>%
+  mutate(date = mdy(date))
+dat
+```
+
+
+### Perform some EDA
+```{r}
+dat %>%
+  summary()
+```
+
+```{r}
+colSums(is.na(dat))
+```
+
+
+```{r}
+dat %>% 
+  ggplot() + 
+  geom_line(aes(x = date, y = total_users))
+```
+
+
+# Huh? Oh yeah, this is hourly!
+```{r}
+dat %>%
+  group_by(date) %>%
+  summarize(avg_users = mean(total_users)) %>%
+  ggplot(aes(x = date, y = avg_users)) + 
+  geom_line() + 
+  geom_smooth(method = 'loess') +
+  ggtitle('Average Daily Users 2011 - 2012')
+```
+
+
+```{r}
+dat %>%
+  group_by(date, hour) %>%
+  summarize(avg_users = mean(total_users)) %>%
+  ggplot(aes(x = avg_users)) + 
+  geom_histogram(bins = 30) + 
+  ggtitle('Average Daily Users Per Hour')
+```
+
+
+
+```{r}
+dat %>%
+  group_by(date, hour, day_of_the_week) %>%
+  summarize(avg_users = mean(total_users)) %>%
+  ggplot(aes(x = factor(day_of_the_week), y = avg_users)) + 
+  geom_boxplot()
+```
+
+
+```{r}
+dat %>%
+  group_by(hour, working_day) %>%
+  summarize(avg_users = mean(total_users)) %>%
+  ggplot(aes(x = hour, y = avg_users, col = factor(working_day))) + 
+  geom_line() + 
+  ggtitle('Average Users Per Hour') + 
+  labs(subtitle = 'Broken down by working day')
+```
+
+
+
+```{r}
+dat %>%
+  ggplot(aes(x = temperature_f, y = temperature_feels_f)) + 
+  geom_point()
+```
+
+
+
+```{r}
+dat %>% 
+  filter(temperature_f > 60 & temperature_f < 90) %>%
+  filter(temperature_feels_f > 25 & temperature_feels_f < 40)
+```
+
+
+```{r}
+dat %>%
+  mutate(tmp_diff = abs(temperature_f - temperature_feels_f)) %>%
+  ggplot(aes(x = tmp_diff)) + 
+  geom_histogram(binwidth = 1)
+```
+
+
+```{r}
+dat %>%
+  mutate(tmp_diff = abs(temperature_f - temperature_feels_f),
+         tmp_feel_normal = if_else(tmp_diff < 25, temperature_feels_f, NA_real_)) %>%
+  filter(is.na(tmp_feel_normal)) %>% 
+  select(temperature_f, temperature_feels_f, tmp_diff, tmp_feel_normal)
+```
+
+
+
+```{r}
+clean_dat = dat %>% 
+  mutate(tmp_diff = abs(temperature_f - temperature_feels_f),
+         tmp_feel_normal = if_else(tmp_diff < 25, temperature_feels_f, NA_real_)) %>%
+  group_by(season, hour, holiday, day_of_the_week, working_day, weather_type) %>%
+  mutate(temperature_feels_f = if_else(is.na(tmp_feel_normal), mean(temperature_feels_f, na.rm = TRUE), temperature_feels_f)) %>%
+  ungroup()
+```
+
+
+
+```{r}
+clean_dat %>%
+  group_by(date) %>%
+  summarize(mean_tmp = mean(temperature_f),
+            mean_tmp_feels = mean(temperature_feels_f),
+            avg_users = mean(total_users)) %>%
+  ggplot(aes(x = mean_tmp, y = mean_tmp_feels, 
+             size = avg_users, col = avg_users, fill = avg_users)) + 
+  geom_point(alpha = 0.3)
+```
+
+
+```{r}
+clean_dat %>% 
+  group_by(date) %>%
+  summarize(avg_tmp_feels = mean(temperature_feels_f),
+            avg_tmp = mean(temperature_f),
+            avg_users = mean(total_users)) %>%
+  ggplot(aes(x = avg_tmp, y = avg_users)) + 
+  geom_point()
+```
+
+
+```{r}
+clean_dat %>% 
+  group_by(date) %>%
+  summarize(avg_tmp_feels = mean(temperature_feels_f),
+            avg_tmp = mean(temperature_f),
+            avg_users = mean(total_users)) %>%
+  ggplot(aes(x = avg_tmp_feels, y = avg_users)) + 
+  geom_point()
+```
+
+
+```{r}
+temporary = clean_dat %>%
+  group_by(date) %>%
+  summarize(temperature_feels_f = mean(temperature_feels_f), 
+            humidity = mean(humidity), 
+            wind_speed = mean(wind_speed), 
+            total_users = mean(total_users))
+plot(temporary)
+```
+
+
+
+
+
+```{r}
+reg_dat = tibble(x = clean_dat$temperature_feels_f, y = clean_dat$total_users)
+```
+
+
+# y = mx + b
+
+```{r}
+slope = 10
+intercept = -9
+
+model = reg_dat %>%
+  mutate(fit = (slope * x) + intercept)
+
+model %>%
+  ggplot(aes(x = x)) + 
+  geom_point(aes(y = y), alpha = 0.10) + 
+  geom_line(aes(y = fit), col = 'blue', size = 2)
+```
+
+
+
+```{r}
+slope = 4
+intercept = -25
+
+model = reg_dat %>%
+  mutate(fit = (slope * x) + intercept)
+
+model %>%
+  ggplot(aes(x = x)) + 
+  geom_point(aes(y = y), alpha = 0.10) + 
+  geom_line(aes(y = fit), col = 'blue', size = 2)
+```
+
+
+```{r}
+head(model)
+```
+
+```{r}
+model %>% 
+  mutate(residuals = fit - y)
+```
+
+
+```{r}
+slope = 4
+intercept = -25
+
+model = reg_dat %>%
+  mutate(fit = (slope * x) + intercept)
+
+model %>% 
+  mutate(residuals = fit - y) %>%
+  ggplot(aes(x = residuals)) + 
+  geom_histogram(bins = 30)
+```
+
+
+```{r}
+slope = 1
+intercept = -10
+model1 = reg_dat %>%
+  mutate(fit = (slope * x) + intercept,
+         model = 'model1')
+
+
+slope = 4
+intercept = -20
+model2 = reg_dat %>%
+  mutate(fit = (slope * x) + intercept,
+         model = 'model2')
+
+
+slope = 10
+intercept = -25
+model3 = reg_dat %>%
+  mutate(fit = (slope * x) + intercept,
+         model = 'model3')
+
+
+all_models = bind_rows(model1, model2, model3) 
+
+all_models %>% 
+  mutate(residuals = fit - y) %>%
+  ggplot(aes(x = residuals, fill = model)) + 
+  geom_density(alpha = 0.3)
+```
+
+
+```{r}
+all_models %>%
+  mutate(residuals = fit - y) %>%
+  group_by(model) %>%
+  summarize(sum_of_error = sum(residuals))
+```
+
+
+```{r}
+all_models %>%
+  mutate(residuals = fit - y,
+         residuals_squared = residuals^2) %>%
+  group_by(model) %>%
+  summarize(sum_of_squared_error = sum(residuals_squared))
+```
+
+
+```{r}
+slope = -1
+intercept = -10
+model = reg_dat %>%
+  mutate(fit = (slope * x) + intercept,
+         residuals = fit - y,
+         residuals_squared = residuals^2,
+         slope = slope,
+         intercept = intercept,
+         slope_intercept = paste0(as.character(slope), '_', as.character(intercept)))
+
+
+slope = 1:4
+intercept = -1:1
+for(s in slope){
+  for(i in intercept){
+    temporary = reg_dat %>%
+      mutate(fit = (s * x) + i,
+             residuals = fit - y,
+             residuals_squared = residuals^2,
+             slope = s,
+             intercept = i,
+             slope_intercept = paste0(as.character(slope), '_', as.character(intercept)))
+    model = bind_rows(model, temporary)
+  }
+}
+
+model
+```
+
+```{r}
+model %>%
+  ggplot(aes(x = x, group = slope_intercept)) + 
+  geom_point(aes(y = y)) + 
+  geom_line(aes(y = fit), alpha = 0.3, col = 'red')
+```
+
+
+## Linear Regression
+
+```{r}
+cor(clean_dat$total_users, clean_dat$temperature_feels_f)
+```
+
+
+
+```{r}
+mod = lm(total_users ~ temperature_feels_f, data = reg_dat)
+summary(mod)
+```
+
+
+```{r}
+mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed, data = clean_dat)
+summary(mod)
+```
+
+
+```{r}
+mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed + day_of_the_week, data = clean_dat)
+summary(mod)
+```
+
+
+
+
+
+```{r}
+fct_dat = clean_dat %>%
+  mutate(hour = as.factor(hour),
+         season = as.factor(season),
+         holiday = as.factor(holiday),
+         day_of_the_week = as.factor(day_of_the_week),
+         weather_type = as.factor(weather_type),
+         working_day = as.factor(working_day)) %>%
+  select(-tmp_feel_normal)
+
+
+mod = lm(total_users ~ temperature_feels_f + humidity + wind_speed, data = fct_dat)
+summary(mod)
+```
+
+
+```{r}
+mod = lm(total_users ~ ., data = fct_dat)
+summary(mod)
+```
+
+
+
+```{r}
+fct_dat_mod = fct_dat %>%
+  select(-tmp_diff,-casual_users, -registered_users, -date)
+mod = lm(total_users ~ ., data = fct_dat_mod)
+summary(mod)
+```
+
