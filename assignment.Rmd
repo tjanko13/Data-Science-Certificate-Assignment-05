@@ -25,7 +25,15 @@ dat = iris %>%
 
 ### Look at data
 ```{r}
-head(dat)
+head(dat, 12)
+```
+
+```{r}
+summary(dat)
+```
+
+```{r}
+colSums(is.na(dat))
 ```
 
 
@@ -34,7 +42,7 @@ head(dat)
 Use `geom_point` and `geom_smooth` to visually identify any relationship between the two variables. Use `sepal_length` along the x-axis.
 ```{r}
 dat %>%
-  ggplot(...) +
+  ggplot(mapping = aes(x = sepal_length, y = petal_length)) +
   geom_point() + 
   geom_smooth()
 ```
@@ -50,13 +58,26 @@ Keep changing the slope & intercept values to see what it does to your line of b
 # m is slope, b is intercept
 # residuals are the difference between y and the fit
 # hint: petal_length is the `y` in this case, sepal_length is the `x`
+#y = mx+b
 
-m = 0  # Slope
-b = 0  # Intercept
+# regression model ----->  fit or (y) = (slope * x) + intercept
+# fit or (y) = target, dependent or predicted variable (petal_length) expressed as a double (float) value of centimeters
+# m = slope value expressed as an integer
+# x = predictor or independent variable (temperature_feels_f) expressed as a double (float) value in centimeters
+# b = intercept value
+
+#reg_dat = tibble(x = dat$sepal_length, y = dat$petal_length)
+#reg_dat
+
+x <- dat$sepal_length
+y <- dat$petal_length
+
+m = 1.7 # Slope 1.85843
+b = -6.2  # Intercept -7.10144
 
 final_data = dat %>%
-  mutate(fit = ...,
-         residuals = ...,
+  mutate(fit = (m * x) + b,
+         residuals = fit - y,
          squared_residuals = residuals^2)
 
 
@@ -64,25 +85,32 @@ final_data = dat %>%
 final_data %>%
   ggplot(aes(x = sepal_length)) + 
   geom_point(aes(y = petal_length)) + 
-  geom_line(aes(y = fit), col = 'red')
+  geom_line(aes(y = fit), col = 'red', size=1.25)
 ```
 
 
 ### Plot a histogram of the residuals  
 
 In lay person terms, what do the residuals tell us and why should we care about them?
+
+Residuals are the difference between the actual observed values of y and the predicted values of y, (fit - y), which is the dependent/target/predicted variable. Each data point has one residual, and residuals = Observed value - Predicted value. Summing and taking the mean of residuals equal 0. Residuals tell us how far off the fit is from the true point, and allows us to fit the model to the ideal slope and intercept; thereby having the best predictive regression model.
+
 ```{r}
+
 final_data %>%
-  ggplot(...) + 
-  geom_histogram()
+  ggplot(aes(x = residuals)) + 
+  geom_histogram(bins=30)
 ```
 
 
 ### Use the linear regression function  
 
 Use the `lm` function to model your data, and then compare the results to the slope and intercept you chose above. In lay person terms, write a short description of what the slope of the model means.
+
+The slope means we that for every single unit of change in the independent/predictor variable (x), we get 1.85 times the change in the dependent/target variable (y). So, petal_length increases 1.85 times for every centimeter of sepal_length. Maybe that's why flowers are so pretty.
+
 ```{r}
-mod = lm(... ~ ..., data = dat)
+mod = lm(petal_length ~ sepal_length, data = final_data)
 summary(mod)
 ```
 
